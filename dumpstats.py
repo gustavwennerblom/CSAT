@@ -4,7 +4,7 @@ from sqlalchemy.sql import select, and_
 from sqlalchemy.orm import sessionmaker
 from openpyxl import Workbook
 
-conn = mysql.connector.connect(user='root', password='Clupea_8', host='localhost', database='CSS')
+conn = mysql.connector.connect(user='root', password='*****', host='localhost', database='CSS')
 cur = conn.cursor()
 
 db = create_engine("mysql+mysqlconnector://root:Clupea_8@localhost/CSS")
