@@ -1,12 +1,12 @@
 projectId
 projectName
 startFlow
-adminSendStatus
+adminSendStatus     # Denotes that survey trigger has been sent to PM
 lowRatingValue
 dateUpload
 pmPhone
 surveyType
-pmSendStatus
+pmSendStatus        # "Yes"==has been sent to PM; "No"==has not been sent to PM
 pmRejectReason
 pmAutoReminder
 pmManualReminder
