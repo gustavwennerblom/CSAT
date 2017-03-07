@@ -4,11 +4,19 @@ from sqlalchemy.sql import select, and_, or_
 from sqlalchemy.orm import sessionmaker
 from openpyxl import Workbook
 from openpyxl.styles import Font
+import sys
 
-conn = mysql.connector.connect(user='root', password='***', host='localhost', database='CSS')
+sqluser="root"
+sqlpassword="***"
+
+if sqlpassword=="***":
+    print("Update to actual password")
+    sys.exit(0)
+
+conn = mysql.connector.connect(user=sqluser, password=sqlpassword, host='localhost', database='CSS')
 cur = conn.cursor()
 
-db = create_engine("mysql+mysqlconnector://root:***@localhost/CSS")
+db = create_engine("mysql+mysqlconnector://%s:%s@localhost/CSS" % (sqluser, sqlpassword))
 db.echo = False
 meta = MetaData()
 meta.reflect(bind=db)
