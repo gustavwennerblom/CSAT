@@ -1,0 +1,27 @@
+Table for survey's answered: 'answers'
+	Field desciption:
+	'answerId': primary key for db
+	'uniqueId': id for specific question in specific survey
+	'questionId': generic id for question class (100-105)
+	'answersNumeric': score given on question 100-103
+	'answersText': rating/reply given on question 104-105
+	'ratingId': id for specific survey answer (covers question 100-105)
+	'dateAnswer': datetime when answered by client
+
+Table for survey's replied to: 'ratings'
+	Relevant fields description:
+	'projectId': Unique id for a project
+	'ratingId': maps against ratingId in table 'answers'
+
+Table for project master data: 'projects'
+	(fields as in current dumpstats script)
+	'projectId': maps against projectId in table 'ratings'
+	Fields to carry from this table:
+	-"PM Name"(pmName, pmLastName)
+	-"Project Name" (
+	-"Client corporate name" (customerName)
+	-'subProjectNo"
+	
+Table for survey questions: 'questions':
+	'questionId' maps against questionID in table 'answers'
+	'question':'verbose string on question text
