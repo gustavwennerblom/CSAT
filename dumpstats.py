@@ -26,9 +26,13 @@ cur = conn.cursor()
 
 db = create_engine("mysql+mysqlconnector://%s:%s@%s/%s" % (sqluser, sqlpassword, sqlhost, database_name))
 db.echo = False
+
 meta = MetaData()
 meta.reflect(bind=db)
 projects = Table('projects', meta, autoload=True)
+questions = Table('questions', meta, autoload=True)
+answers = Table('answers', meta, autoload=True)
+ratings = Table('ratings', meta, autoload=True)
 con = db.connect()
 logging.info("Connected to database")
 
@@ -75,6 +79,39 @@ def get_pending(office):
         projects.c.adminSendStatus == "yes"
     ))
     result = con.execute(stmt)
+
+    out = []
+    for row in result:
+        out.append(row)
+    return out
+
+
+# Returns a list of answered surveys for a given office:
+def get_answers_office(office):
+    stmt = select([
+        projects.c.office,
+        projects.c.customerName,
+        projects.c.subProjectNo,
+        projects.c.pmName,
+        projects.c.pmLastName,
+        answers.c.dateAnswer,
+        answers.c.questionId,
+        questions.c.question,
+        answers.c.answersNumeric,
+        answers.c.answersText,
+    ]).where(and_(
+        answers.c.ratingId == ratings.c.ratingId,
+        answers.c.questionId == questions.c.questionId,
+        ratings.c.projectId == projects.c.projectId,
+        projects.c.office == office)
+    ).order_by(
+        projects.c.office,
+        projects.c.subProjectNo,
+        answers.c.questionId
+    )
+
+    result = con.execute(stmt)
+    logging.info("Queried database for surveys answered: office % s" % office)
 
     out = []
     for row in result:
@@ -192,6 +229,43 @@ def print_all_pending_by_region(regions):
     logging.info("Excel file saved in program root with name %s" % filename)
 
 
+def print_all_answers_by_office(answers, headers):
+    wb = Workbook()
+    logging.info("Preparing answers workbook")
+    for office in answers:
+        ws = wb.create_sheet(title=office)
+        ws.cell(row=1, column=1).value = "Client Satisfaction Survey Answers for %s" % office
+        col = 1
+        row = 3
+        # Loop to write header row
+        for header in headers:
+            ws.cell(row=row, column=col).value = header
+            ws.cell(row=row, column=col).font = title_font
+            col += 1
+        row += 1
+        col = 1
+
+        answers_for_office = get_answers_office(office)
+        i = 0
+        for answer in answers_for_office:
+            for data in answer:
+                ws.cell(row=row, column=col).value = data
+                col += 1
+            row += 1
+            col = 1
+
+    # Clean up autocreated blank sheets in workbook
+    wb.remove_sheet(wb.get_sheet_by_name("Sheet"))
+    logging.info("Cleaning up stuff...")
+
+    # Add a time/date stamp to filename and save
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M")
+    filename = "CSS answers (by office) %s.xlsx" % timestamp
+    wb.save(filename)
+    logging.info("Excel file saved in program root with name %s" % filename)
+
+
 def inspect_table(tablename):
     inspector = inspect(db)
     for column in inspector.get_columns(tablename):
@@ -205,7 +279,7 @@ def get_fields():
     inspect_table("projects")
 
 
-def main():
+def get_status_main():
     # inspect_table("projects")
     offices = list(build_office_set())
     regions = list(build_region_set())
@@ -216,5 +290,22 @@ def main():
     print_all_pending_by_region(regions)
     logging.info("All done, shutting down. Enjoy.")
 
+
+def get_answers_main():
+    offices = list(build_office_set())
+    offices.sort()
+    headers = ["Office", "Client", "Project no", "PM Name", "PM Last Name",
+               "Date answered", "Question number", "Question", "Answer (1)", "Answer (2)"]
+
+    print_all_answers_by_office(offices, headers)
+
+    logging.info("All done, shutting down. Enjoy.")
+
+
 if __name__ == '__main__':
-    main()
+    # Method to trigger printout of survey's pending to be sent
+    # get_status_main()
+
+    # Method to trigger collection of answers
+    get_answers_main()
+
