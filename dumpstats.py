@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, Table, MetaData, inspect
 from sqlalchemy.sql import select, and_, or_
 from sqlalchemy.orm import sessionmaker
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Font, PatternFill
 
 # Create logger
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -107,6 +107,7 @@ def get_answers_office(office):
     ).order_by(
         projects.c.office,
         projects.c.subProjectNo,
+        answers.c.answerId,
         answers.c.questionId
     )
 
@@ -229,9 +230,20 @@ def print_all_pending_by_region(regions):
     logging.info("Excel file saved in program root with name %s" % filename)
 
 
+def alternating_fill(colorcode):
+    color1 = PatternFill("solid", fgColor="00CCFF")
+    color2 = PatternFill("solid", fgColor="FFFFFF")
+    if colorcode == color1:
+        return color2
+    else:
+        return color1
+
+
 def print_all_answers_by_office(answers, headers):
     wb = Workbook()
     logging.info("Preparing answers workbook")
+    cellcolor = alternating_fill(PatternFill("solid", fgColor="FFFFFF"))
+
     for office in answers:
         ws = wb.create_sheet(title=office)
         ws.cell(row=1, column=1).value = "Client Satisfaction Survey Answers for %s" % office
@@ -246,11 +258,15 @@ def print_all_answers_by_office(answers, headers):
         col = 1
 
         answers_for_office = get_answers_office(office)
-        i = 0
+
         for answer in answers_for_office:
             for data in answer:
                 ws.cell(row=row, column=col).value = data
                 col += 1
+            # Change cell fill color between survey answers
+            # cellcolor = alternating_fill(cellcolor)
+            # ws.cell(row=row, column=col).fill = cellcolor
+            # Put cursor on new row and first column
             row += 1
             col = 1
 
@@ -295,7 +311,7 @@ def get_answers_main():
     offices = list(build_office_set())
     offices.sort()
     headers = ["Office", "Client", "Project no", "PM Name", "PM Last Name",
-               "Date answered", "Question number", "Question", "Answer (1)", "Answer (2)"]
+               "Date answered", "Question number", "Question", "Answer (score)", "Answer (text/comment)"]
 
     print_all_answers_by_office(offices, headers)
 
