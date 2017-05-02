@@ -86,6 +86,8 @@ class CSATanalyzer:
             out.append(row)
         return out
 
+    # Returns list of two ints, the first one representing total CSS's due to send by the office and the second one
+    # the number of actually sent CSS's
     def count_pending(self, office, **kwargs):
         start_date = datetime(2017, 1, 1)
         try:
