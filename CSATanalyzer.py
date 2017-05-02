@@ -1,6 +1,7 @@
 import json
 import logging
 import mysql.connector
+from datetime import datetime
 from sqlalchemy import create_engine, Table, MetaData, inspect
 from sqlalchemy.sql import select, and_
 from openpyxl import Workbook
@@ -86,24 +87,34 @@ class CSATanalyzer:
         return out
 
     def count_pending(self, office, **kwargs):
-        start_date = "2000-02-02"
+        start_date = datetime(2017, 1, 1)
         try:
+            assert isinstance(kwargs["start_date"], datetime)
             start_date=kwargs["start_date"]
         except:
             logging.info("No start date given, considering surveys triggered from {0} "
                          "and forward in time".format(start_date))
 
-        stmt_total = select([self.projects.c.subProjectNo]).where(
-            self.projects.c.office == office)
+        stmt_total = select([self.projects.c.subProjectNo]).where(and_(
+            self.projects.c.office == office,
+            self.projects.c.dateUpload > start_date))
 
         stmt_pending = select([self.projects.c.subProjectNo]).where(and_(
             self.projects.c.office == office,
-            self.projects.c.pmSendStatus == "no"))
+            self.projects.c.pmSendStatus == "no",
+            self.projects.c.dateUpload > start_date))
 
 
         result = [len(self.con.execute(stmt_total).fetchall()), len(self.con.execute(stmt_pending).fetchall())]
 
         return result
+
+    #test function
+    def get_a_date(self):
+        stmt = select([self.projects.c.dateUpload]).where(self.projects.c.office == "Shanghai")
+        result = self.con.execute(stmt)
+        one_date = result.fetchone()
+        return 1
 
 
 
@@ -347,7 +358,8 @@ if __name__ == '__main__':
 
     # Method to trigger collection of answers
     ca = CSATanalyzer()
+    ca.get_a_date()
     offices = ca.build_office_set()
     for office in offices:
-        print("{1}: {2} pending, of total {0}". format(ca.count_pending(office)[0], office, ca.count_pending(office)[1]))
+        print("{1}: {2} pending, of total {0}". format(ca.count_pending(office, start_date=datetime(2017, 1, 1))[0], office, ca.count_pending(office, start_date=datetime(2017,1,1))[1]))
 
