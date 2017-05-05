@@ -14,7 +14,7 @@ class CSATanalyzer:
     def __init__(self):
         # Create logger
         FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        logging.basicConfig(filename="CSATstats.log", format=FORMAT, level=logging.INFO)
+        logging.basicConfig(filename="./logs2/CSATstats.log", format=FORMAT, level=logging.INFO)
 
         # Read MySQL config and credentials and store in a dict
         with open(os.path.join(os.path.dirname(__file__), "creds_mysql.json")) as f:
