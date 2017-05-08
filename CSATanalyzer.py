@@ -13,8 +13,8 @@ class CSATanalyzer:
 
     def __init__(self):
         # Create logger
-        FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        logging.basicConfig(filename="./logs2/CSATstats.log", format=FORMAT, level=logging.INFO)
+        log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        logging.basicConfig(filename="./logs2/CSATstats.log", format=log_format, level=logging.INFO)
 
         # Read MySQL config and credentials and store in a dict
         with open(os.path.join(os.path.dirname(__file__), "creds_mysql.json")) as f:
@@ -93,8 +93,8 @@ class CSATanalyzer:
         start_date = datetime(2017, 1, 1)
         try:
             assert isinstance(kwargs["start_date"], datetime)
-            start_date=kwargs["start_date"]
-        except:
+            start_date = kwargs["start_date"]
+        except TypeError:
             logging.info("No start date given, considering surveys triggered from {0} "
                          "and forward in time".format(start_date))
 
@@ -107,23 +107,19 @@ class CSATanalyzer:
             self.projects.c.pmSendStatus == "no",
             self.projects.c.dateUpload > start_date))
 
-
         result = [len(self.con.execute(stmt_total).fetchall()), len(self.con.execute(stmt_pending).fetchall())]
 
         return result
 
-    #test function
+    # test function
     def get_a_date(self):
         stmt = select([self.projects.c.dateUpload]).where(self.projects.c.office == "Shanghai")
         result = self.con.execute(stmt)
         one_date = result.fetchone()
         return 1
 
-
-
-
     # Returns a list of answered surveys for a given office:
-    def get_answers_office(self, office):
+    def get_answers_office(self, office, start_date):
         stmt = select([
             self.projects.c.office,
             self.projects.c.customerName,
@@ -139,7 +135,8 @@ class CSATanalyzer:
             self.answers.c.ratingId == self.ratings.c.ratingId,
             self.answers.c.questionId == self.questions.c.questionId,
             self.ratings.c.projectId == self.projects.c.projectId,
-            self.projects.c.office == office)
+            self.projects.c.office == office,
+            self.projects.c.dateUpload > start_date)
         ).order_by(
             self.projects.c.office,
             self.projects.c.subProjectNo,
@@ -155,9 +152,44 @@ class CSATanalyzer:
             out.append(row)
         return out
 
+    # Returns a list of answered surveys for a given region, provided a start date
+    # for survey upload (datetime.datetime):
+    def get_answers_region(self, region, start_date):
+        stmt = select([
+            self.projects.c.region,
+            self.projects.c.office,
+            self.projects.c.customerName,
+            self.projects.c.subProjectNo,
+            self.projects.c.pmName,
+            self.projects.c.pmLastName,
+            self.answers.c.dateAnswer,
+            self.answers.c.questionId,
+            self.questions.c.question,
+            self.answers.c.answersNumeric,
+            self.answers.c.answersText,
+        ]).where(and_(
+            self.answers.c.ratingId == self.ratings.c.ratingId,
+            self.answers.c.questionId == self.questions.c.questionId,
+            self.ratings.c.projectId == self.projects.c.projectId,
+            self.projects.c.region == region,
+            self.projects.c.dateUpload > start_date)
+        ).order_by(
+            self.projects.c.office,
+            self.projects.c.subProjectNo,
+            self.answers.c.answerId,
+            self.answers.c.questionId
+        )
+
+        result = self.con.execute(stmt)
+        logging.info("Queried database for surveys answered: region {0}".format(region))
+
+        out = []
+        for row in result:
+            out.append(row)
+        return out
 
     # Returns list of pending surveys for a given region
-    def get_pending_region(self, region):
+    def get_pending_region(self, region, start_date):
         stmt = select([
             self.projects.c.office,
             self.projects.c.customerName,
@@ -169,6 +201,7 @@ class CSATanalyzer:
             self.projects.c.dateUpload
         ]).where(and_(
             self.projects.c.region == region,
+            self.projects.c.dateUpload > start_date
         )).order_by(
             self.projects.c.office,
             self.projects.c.subProjectNo,
@@ -182,7 +215,6 @@ class CSATanalyzer:
             out.append(row)
         return out
 
-
     def print_all_pending_by_office(self, offices):
         counter = 0
         for office in offices[:2]:
@@ -193,8 +225,7 @@ class CSATanalyzer:
             print("---")
         print("%i surveys missing" % counter)
 
-
-    def print_all_pending_by_region(self, regions):
+    def print_all_pending_by_region(self, regions, start_date):
         wb = Workbook()
         logging.info("Preparing results spreadsheet")
         for reg in regions:
@@ -212,7 +243,7 @@ class CSATanalyzer:
             col = 1
 
             # Collect list of pending surveys for the region
-            missing_surveys = self.get_pending_region(reg)
+            missing_surveys = self.get_pending_region(reg, start_date)
             i = 0
             for survey in missing_surveys:
                 totals[survey[0]] = []
@@ -265,7 +296,6 @@ class CSATanalyzer:
         wb.save(filename)
         logging.info("Excel file saved in program root with name %s" % filename)
 
-
     @staticmethod
     def alternating_fill(colorcode):
         color1 = PatternFill("solid", fgColor="00CCFF")
@@ -275,12 +305,14 @@ class CSATanalyzer:
         else:
             return color1
 
-
-    def print_all_answers_by_office(self, answers, headers):
+    # Outputs all answers for a set of offices into an Excel workbook (one tab per office),
+    # given a specific start date
+    def print_all_answers_by_office(self, answers, headers, start_date):
         wb = Workbook()
         logging.info("Preparing answers workbook")
         cellcolor = self.alternating_fill(PatternFill("solid", fgColor="FFFFFF"))
 
+        total_answers = 0
         for office in answers:
             ws = wb.create_sheet(title=office)
             ws.cell(row=1, column=1).value = "Client Satisfaction Survey Answers for %s" % office
@@ -294,7 +326,10 @@ class CSATanalyzer:
             row += 1
             col = 1
 
-            answers_for_office = self.get_answers_office(office)
+            answers_for_office = self.get_answers_office(office, start_date)
+            total_answers += len(answers_for_office)
+            logging.info("Got {0} answer lines for {1}, total found stands at {2}"
+                         .format(len(answers_for_office), office, total_answers))
 
             for answer in answers_for_office:
                 for data in answer:
@@ -318,6 +353,51 @@ class CSATanalyzer:
         wb.save(filename)
         logging.info("Excel file saved in program root with name %s" % filename)
 
+    # Generates an excel file with survey answers for all offices, one sheet per region, given a specific start date
+    def print_all_answers_by_region(self, answers, headers, start_date):
+        wb = Workbook()
+        logging.info("Preparing answers workbook")
+        cellcolor = self.alternating_fill(PatternFill("solid", fgColor="FFFFFF"))
+
+        total_answers = 0
+        for region in answers:
+            ws = wb.create_sheet(title=region)
+            ws.cell(row=1, column=1).value = "Client Satisfaction Survey Answers for %s" % region
+            col = 1
+            row = 3
+            # Loop to write header row
+            for header in headers:
+                ws.cell(row=row, column=col).value = header
+                ws.cell(row=row, column=col).font = self.title_font
+                col += 1
+            row += 1
+            col = 1
+
+            answers_for_region = self.get_answers_region(region, start_date)
+            total_answers += len(answers_for_region)
+            logging.info("Got {0} answer lines for {2}, total for this run stands at {1} lines"
+                         .format(len(answers_for_region), total_answers, region))
+
+            for answer in answers_for_region:
+                for data in answer:
+                    ws.cell(row=row, column=col).value = data
+                    col += 1
+                # Change cell fill color between survey answers
+                # cellcolor = alternating_fill(cellcolor)
+                # ws.cell(row=row, column=col).fill = cellcolor
+                # Put cursor on new row and first column
+                row += 1
+                col = 1
+
+        # Clean up autocreated blank sheets in workbook
+        wb.remove_sheet(wb.get_sheet_by_name("Sheet"))
+        logging.info("Cleaning up stuff...")
+
+        # Add a time/date stamp to filename and save
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M")
+        filename = "CSS answers (by region) %s.xlsx" % timestamp
+        wb.save(filename)
+        logging.info("Excel file saved in program root with name %s" % filename)
 
     def inspect_table(self, tablename):
         inspector = inspect(self.db)
@@ -327,10 +407,8 @@ class CSATanalyzer:
         # out = con.execute(stmt)
         # print(out.fetchall())
 
-
     def get_fields(self):
         self.inspect_table("projects")
-
 
     def get_status_main(self):
         # inspect_table("projects")
@@ -343,16 +421,27 @@ class CSATanalyzer:
         self.print_all_pending_by_region(regions)
         logging.info("All done, shutting down. Enjoy.")
 
-
-    def get_answers_main(self):
+    def get_answers_by_office_main(self):
+        logging.info("Starting process to print workbook with survey answers by office")
         offices = list(self.build_office_set())
         offices.sort()
         headers = ["Office", "Client", "Project no", "PM Name", "PM Last Name",
                    "Date answered", "Question number", "Question", "Answer (score)", "Answer (text/comment)"]
-
-        self.print_all_answers_by_office(offices, headers)
-
+        self.print_all_answers_by_office(offices, headers, datetime(2017, 1, 1))
         logging.info("All done, shutting down. Enjoy.")
+
+    def get_answers_by_region_main(self):
+        logging.info("Starting process to print workbook with survey answers by region")
+        regions = list(self.build_region_set())
+        regions.sort()
+        headers = ["Region", "Office", "Client", "Project no", "PM Name", "PM Last Name",
+                   "Date answered", "Question number", "Question", "Answer (score)", "Answer (text/comment)"]
+        self.print_all_answers_by_region(regions, headers, datetime(2017, 1, 1))
+
+    def get_pending_by_region_main(self, start_date):
+        logging.info("Starting process to print workbook with send status by region")
+        regions = list(self.build_region_set())
+        self.print_all_pending_by_region(regions, start_date)
 
 
 if __name__ == '__main__':
@@ -361,8 +450,11 @@ if __name__ == '__main__':
 
     # Method to trigger collection of answers
     ca = CSATanalyzer()
-    ca.get_a_date()
-    offices = ca.build_office_set()
-    for office in offices:
-        print("{1}: {2} pending, of total {0}". format(ca.count_pending(office, start_date=datetime(2017, 1, 1))[0], office, ca.count_pending(office, start_date=datetime(2017,1,1))[1]))
-
+    # offices = ca.build_office_set()
+    # for office in offices:
+    #     print("{1}: {2} pending, of total {0}".format(ca.count_pending(office, start_date=datetime(2017, 1, 1))[0], 
+    #                                                   office, 
+    #                                                   ca.count_pending(office, start_date=datetime(2017,1,1))[1]))
+    # ca.get_answers_by_region_main()
+    # ca.get_answers_by_office_main()
+    ca.get_pending_by_region_main(datetime(2017,1,1))
