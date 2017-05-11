@@ -1,6 +1,7 @@
 import json
 import logging
 import mysql.connector
+import os
 from datetime import datetime
 from sqlalchemy import create_engine, Table, MetaData, inspect
 from sqlalchemy.sql import select, and_
@@ -14,10 +15,10 @@ class CSATanalyzer:
     def __init__(self):
         # Create logger
         FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        logging.basicConfig(filename="CSATstats.log", format=FORMAT, level=logging.INFO)
+        logging.basicConfig(filename="./logs2/CSATstats.log", format=FORMAT, level=logging.INFO)
 
         # Read MySQL config and credentials and store in a dict
-        with open("creds_mysql.json") as f:
+        with open(os.path.join(os.path.dirname(__file__), "creds_mysql.json")) as f:
             logging.info("Accessing database credentials")
             config = json.loads(f.readline())
 
