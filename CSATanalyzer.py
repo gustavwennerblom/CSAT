@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, Table, MetaData, inspect
 from sqlalchemy.sql import select, and_
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
+import analytics
 
 
 class CSATanalyzer:
@@ -108,8 +109,21 @@ class CSATanalyzer:
 
 
         result = [len(self.con.execute(stmt_total).fetchall()), len(self.con.execute(stmt_pending).fetchall())]
-
         return result
+
+    # TODO: Add the kwarg to set a custom start date
+    # Returns list of two ints, the first one representing total CSS's due to send by the country and the second one
+    # the number of actually sent CSS's
+    def count_pending_by_country(self, country):
+        unit_set = analytics.map_country_to_units(country)
+        country_result =[0,0]
+        for unit in unit_set:
+            unit_result=self.count_pending(unit)
+            country_result[0]+=unit_result[0]
+            country_result[1]+=unit_result[1]
+
+        return country_result
+
 
     #test function
     def get_a_date(self):
