@@ -8,13 +8,38 @@ from sqlalchemy.sql import select, and_
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
+class CSSreply:
+    sub_project_no = row[3],
+    region = row[0],
+    office = row[1],
+    customer_name = row[2],
+    pm_first_name = row[4],
+    pm_last_name = row[5],
+    date_answered = row[6],
+    question_id = row[7],
+    question_text = row[8],
+    answer_numeric = row[9],
+    answer_text = row[10])
+
+    questions_and_answers={}
+
+    def __init__(self,sub_project_no, question_id, question_text, **kwargs):
+        self.sub_project_no=sub_project_no
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+            print(".")
+
+    def add_answer(self):
+
+    # def __repr__(self):
+    #     return "CSSreply for subproject {0}".format(self.sub_project_no)
 
 class CSATanalyzer:
 
     def __init__(self):
         # Create logger
         log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        logging.basicConfig(filename="./logs2/CSATstats.log", format=log_format, level=logging.INFO)
+        logging.basicConfig(filename="./CSATstats.log", format=log_format, level=logging.INFO)
 
         # Read MySQL config and credentials and store in a dict
         with open(os.path.join(os.path.dirname(__file__), "creds_mysql.json")) as f:
@@ -183,9 +208,25 @@ class CSATanalyzer:
         result = self.con.execute(stmt)
         logging.info("Queried database for surveys answered: region {0}".format(region))
 
-        out = []
+        out = {}
         for row in result:
-            out.append(row)
+            sub_proj_no = row[3]
+            if not sub_proj_no in out:
+                response_new = CSSreply(sub_project_no=row[3],
+                                    region=row[0],
+                                    office=row[1],
+                                    customer_name=row[2],
+                                    pm_first_name=row[4],
+                                    pm_last_name=row[5],
+                                    date_answered=row[6],
+                                    question_id=row[7],
+                                    question_text=row[8],
+                                    answer_numeric=row[9],
+                                    answer_text=row[10])
+                out[sub_proj_no]=response_new
+            else:
+                response_append = out[sub_proj_no]
+                response_append.question_id
         return out
 
     # Returns list of pending surveys for a given region
@@ -354,13 +395,13 @@ class CSATanalyzer:
         logging.info("Excel file saved in program root with name %s" % filename)
 
     # Generates an excel file with survey answers for all offices, one sheet per region, given a specific start date
-    def print_all_answers_by_region(self, answers, headers, start_date):
+    def print_all_answers_by_region(self, regions, headers, start_date):
         wb = Workbook()
         logging.info("Preparing answers workbook")
         cellcolor = self.alternating_fill(PatternFill("solid", fgColor="FFFFFF"))
 
         total_answers = 0
-        for region in answers:
+        for region in regions:
             ws = wb.create_sheet(title=region)
             ws.cell(row=1, column=1).value = "Client Satisfaction Survey Answers for %s" % region
             col = 1
@@ -375,19 +416,38 @@ class CSATanalyzer:
 
             answers_for_region = self.get_answers_region(region, start_date)
             total_answers += len(answers_for_region)
-            logging.info("Got {0} answer lines for {2}, total for this run stands at {1} lines"
+
+            logging.info("Got {0} CSS replies  for {2}, total for this run stands at {1} lines"
                          .format(len(answers_for_region), total_answers, region))
 
-            for answer in answers_for_region:
-                for data in answer:
-                    ws.cell(row=row, column=col).value = data
+            for reply in answers_for_region:
+                for item in reply:
+                    # assert isinstance(item, CSSreply)
+                    ws.cell(row=row, column=1).value = item.office
+                    ws.cell(row=row, column=2).value = item.customer_name
+                    ws.cell(row=row, column=3).value = item.sub_project_no
+                    ws.cell(row=row, column=4).value = item.pm_first_name
+                    ws.cell(row=row, column=5).value = item.pm_last_name
+                    ws.cell(row=row, column=6).value = item.date_answered
+                    ws.cell(row=row, column=7).value = item.qu
+
                     col += 1
-                # Change cell fill color between survey answers
-                # cellcolor = alternating_fill(cellcolor)
-                # ws.cell(row=row, column=col).fill = cellcolor
-                # Put cursor on new row and first column
                 row += 1
                 col = 1
+
+            response = CSSreply(sub_project_no=row[3],
+                                region=row[0],
+                                office=row[1],
+                                customer_name=row[2],
+                                pm_first_name=row[4],
+                                pm_last_name=row[5],
+                                date_answered=row[6],
+                                question_id=row[7],
+                                question_text=row[8],
+                                answer_numeric=row[9],
+                                answer_text=row[10])
+            headers = ["Office", "Client", "Project no", "PM Name", "PM Last Name",
+                       "Date answered", "Question number", "Question", "Answer (score)", "Answer (text/comment)"]
 
         # Clean up autocreated blank sheets in workbook
         wb.remove_sheet(wb.get_sheet_by_name("Sheet"))
@@ -445,16 +505,40 @@ class CSATanalyzer:
 
 
 if __name__ == '__main__':
+    ca = CSATanalyzer()
+
+    print("Please select action:")
+    print("[1] Create xlsx on pending surveys by Region since 2017/01/01")
+    print("[2] Create xlsx on answers received by Region")
+    print("[3] Create xlsx on answers received by Office")
+    print("[4] Drop to shell")
+    selection = int(input("..."))
+
+    if selection == 1:
+        ca.get_pending_by_region_main(datetime(2017, 1, 1))
+    elif selection == 2:
+        ca.get_answers_by_region_main()
+    elif selection == 3:
+        ca.get_answers_by_office_main()
+    elif selection == 4:
+        import code
+        code.interact(local=locals())
+    else:
+        print("Bad input. Bye")
+
+    print("Successful. Please check root directory")
+
+
     # Method to trigger printout of survey's pending to be sent
     # get_status_main()
 
     # Method to trigger collection of answers
-    ca = CSATanalyzer()
+
     # offices = ca.build_office_set()
     # for office in offices:
     #     print("{1}: {2} pending, of total {0}".format(ca.count_pending(office, start_date=datetime(2017, 1, 1))[0], 
     #                                                   office, 
     #                                                   ca.count_pending(office, start_date=datetime(2017,1,1))[1]))
-    # ca.get_answers_by_region_main()
+
     # ca.get_answers_by_office_main()
-    ca.get_pending_by_region_main(datetime(2017,1,1))
+    #
