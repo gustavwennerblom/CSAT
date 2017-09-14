@@ -9,27 +9,21 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
 class CSSreply:
-    sub_project_no = row[3],
-    region = row[0],
-    office = row[1],
-    customer_name = row[2],
-    pm_first_name = row[4],
-    pm_last_name = row[5],
-    date_answered = row[6],
-    question_id = row[7],
-    question_text = row[8],
-    answer_numeric = row[9],
-    answer_text = row[10])
 
-    questions_and_answers={}
+    replies={}
 
-    def __init__(self,sub_project_no, question_id, question_text, **kwargs):
+    def __init__(self,sub_project_no, **kwargs):
         self.sub_project_no=sub_project_no
         for key, value in kwargs.items():
             setattr(self, key, value)
             print(".")
 
-    def add_answer(self):
+    def add_answer(self, question_id, question_text, answer_numeric, answer_text):
+        if answer_numeric:
+            answer = answer_numeric
+        else:
+            answer = answer_text
+        self.replies[question_id] = answer
 
     # def __repr__(self):
     #     return "CSSreply for subproject {0}".format(self.sub_project_no)
@@ -218,15 +212,18 @@ class CSATanalyzer:
                                     customer_name=row[2],
                                     pm_first_name=row[4],
                                     pm_last_name=row[5],
-                                    date_answered=row[6],
-                                    question_id=row[7],
-                                    question_text=row[8],
-                                    answer_numeric=row[9],
-                                    answer_text=row[10])
+                                    date_answered=row[6])
+                response_new.add_answer(question_id=row[7],
+                                        question_text=row[8],
+                                        answer_numeric=row[9],
+                                        answer_text=row[10])
                 out[sub_proj_no]=response_new
             else:
                 response_append = out[sub_proj_no]
-                response_append.question_id
+                response_append.add_answer(question_id=row[7],
+                                        question_text=row[8],
+                                        answer_numeric=row[9],
+                                        answer_text=row[10])
         return out
 
     # Returns list of pending surveys for a given region
@@ -414,22 +411,23 @@ class CSATanalyzer:
             row += 1
             col = 1
 
-            answers_for_region = self.get_answers_region(region, start_date)
+            replies_for_region = self.get_answers_region(region, start_date)
             total_answers += len(answers_for_region)
 
             logging.info("Got {0} CSS replies  for {2}, total for this run stands at {1} lines"
                          .format(len(answers_for_region), total_answers, region))
 
-            for reply in answers_for_region:
-                for item in reply:
-                    # assert isinstance(item, CSSreply)
-                    ws.cell(row=row, column=1).value = item.office
-                    ws.cell(row=row, column=2).value = item.customer_name
-                    ws.cell(row=row, column=3).value = item.sub_project_no
-                    ws.cell(row=row, column=4).value = item.pm_first_name
-                    ws.cell(row=row, column=5).value = item.pm_last_name
-                    ws.cell(row=row, column=6).value = item.date_answered
-                    ws.cell(row=row, column=7).value = item.qu
+            for reply in replies_for_region:
+                ws.cell(row=row, column=1).value = reply.office
+                ws.cell(row=row, column=2).value = reply.customer_name
+                ws.cell(row=row, column=3).value = reply.sub_project_no
+                ws.cell(row=row, column=4).value = reply.pm_first_name
+                ws.cell(row=row, column=5).value = reply.pm_last_name
+                ws.cell(row=row, column=6).value = reply.date_answered
+                col = 7
+                for qna in reply.replies:
+                    ws.cell(row=row, column=col)=qna.
+
 
                     col += 1
                 row += 1
