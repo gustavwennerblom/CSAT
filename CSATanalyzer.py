@@ -10,20 +10,18 @@ from openpyxl.styles import Font, PatternFill
 
 class CSSreply:
 
-    replies={}
-
     def __init__(self,sub_project_no, **kwargs):
         self.sub_project_no=sub_project_no
         for key, value in kwargs.items():
             setattr(self, key, value)
-            print(".")
+        self.qna={}
 
     def add_answer(self, question_id, question_text, answer_numeric, answer_text):
         if answer_numeric:
             answer = answer_numeric
         else:
             answer = answer_text
-        self.replies[question_id] = answer
+        self.qna[question_id] = answer
 
     # def __repr__(self):
     #     return "CSSreply for subproject {0}".format(self.sub_project_no)
@@ -171,7 +169,7 @@ class CSATanalyzer:
             out.append(row)
         return out
 
-    # Returns a list of answered surveys for a given region, provided a start date
+    # Returns a dict (keys=sub project numbers, values=CSSreply instances) of answered surveys for a given region, provided a start date
     # for survey upload (datetime.datetime):
     def get_answers_region(self, region, start_date):
         stmt = select([
@@ -186,6 +184,7 @@ class CSATanalyzer:
             self.questions.c.question,
             self.answers.c.answersNumeric,
             self.answers.c.answersText,
+            self.projects.c.dateUpload
         ]).where(and_(
             self.answers.c.ratingId == self.ratings.c.ratingId,
             self.answers.c.questionId == self.questions.c.questionId,
@@ -212,7 +211,8 @@ class CSATanalyzer:
                                     customer_name=row[2],
                                     pm_first_name=row[4],
                                     pm_last_name=row[5],
-                                    date_answered=row[6])
+                                    date_answered=row[6],
+                                    date_uploaded=row[11])
                 response_new.add_answer(question_id=row[7],
                                         question_text=row[8],
                                         answer_numeric=row[9],
@@ -395,9 +395,9 @@ class CSATanalyzer:
     def print_all_answers_by_region(self, regions, headers, start_date):
         wb = Workbook()
         logging.info("Preparing answers workbook")
-        cellcolor = self.alternating_fill(PatternFill("solid", fgColor="FFFFFF"))
+        # cellcolor = self.alternating_fill(PatternFill("solid", fgColor="FFFFFF"))
 
-        total_answers = 0
+        total_replies = 0
         for region in regions:
             ws = wb.create_sheet(title=region)
             ws.cell(row=1, column=1).value = "Client Satisfaction Survey Answers for %s" % region
@@ -412,40 +412,31 @@ class CSATanalyzer:
             col = 1
 
             replies_for_region = self.get_answers_region(region, start_date)
-            total_answers += len(answers_for_region)
+            total_replies += len(replies_for_region)
 
             logging.info("Got {0} CSS replies  for {2}, total for this run stands at {1} lines"
-                         .format(len(answers_for_region), total_answers, region))
+                         .format(len(replies_for_region), total_replies, region))
 
-            for reply in replies_for_region:
+            question_numbers=[100, 101, 102,103,104,105]
+
+            for subproject_number, reply in replies_for_region.items():
                 ws.cell(row=row, column=1).value = reply.office
                 ws.cell(row=row, column=2).value = reply.customer_name
                 ws.cell(row=row, column=3).value = reply.sub_project_no
                 ws.cell(row=row, column=4).value = reply.pm_first_name
                 ws.cell(row=row, column=5).value = reply.pm_last_name
-                ws.cell(row=row, column=6).value = reply.date_answered
-                col = 7
-                for qna in reply.replies:
-                    ws.cell(row=row, column=col)=qna.
-
-
+                ws.cell(row=row, column=6).value = reply.date_uploaded
+                ws.cell(row=row, column=7).value = reply.date_answered
+                col = 8
+                for question_no in question_numbers:
+                    try:
+                        ws.cell(row=row, column=col).value = reply.qna[question_no]
+                    except KeyError:
+                        logging.warning("No reply to question {0} in reply for subproject {1}"
+                                        .format(question_no, subproject_number))
                     col += 1
                 row += 1
                 col = 1
-
-            response = CSSreply(sub_project_no=row[3],
-                                region=row[0],
-                                office=row[1],
-                                customer_name=row[2],
-                                pm_first_name=row[4],
-                                pm_last_name=row[5],
-                                date_answered=row[6],
-                                question_id=row[7],
-                                question_text=row[8],
-                                answer_numeric=row[9],
-                                answer_text=row[10])
-            headers = ["Office", "Client", "Project no", "PM Name", "PM Last Name",
-                       "Date answered", "Question number", "Question", "Answer (score)", "Answer (text/comment)"]
 
         # Clean up autocreated blank sheets in workbook
         wb.remove_sheet(wb.get_sheet_by_name("Sheet"))
@@ -476,7 +467,7 @@ class CSATanalyzer:
         offices.sort()
         regions.sort()
 
-        self.print_all_pending_by_region(regions)
+        self.print_all_pending_by_region(regions, datetime(2017,1,1))
         logging.info("All done, shutting down. Enjoy.")
 
     def get_answers_by_office_main(self):
@@ -492,8 +483,8 @@ class CSATanalyzer:
         logging.info("Starting process to print workbook with survey answers by region")
         regions = list(self.build_region_set())
         regions.sort()
-        headers = ["Region", "Office", "Client", "Project no", "PM Name", "PM Last Name",
-                   "Date answered", "Question number", "Question", "Answer (score)", "Answer (text/comment)"]
+        headers = ["Office","Client", "Project no", "PM Name", "PM Last Name", "Date uploaded",
+                   "Date answered", "Q-100", "Q-101","Q-102","Q-103","Q-104", "Q-105"]
         self.print_all_answers_by_region(regions, headers, datetime(2017, 1, 1))
 
     def get_pending_by_region_main(self, start_date):

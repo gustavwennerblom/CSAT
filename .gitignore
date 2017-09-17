@@ -3,3 +3,4 @@ creds_mysql.json
 *.xlsx
 *.log
 __pycache__
+*.~*
