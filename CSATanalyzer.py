@@ -190,7 +190,7 @@ class CSATanalyzer:
             self.answers.c.questionId == self.questions.c.questionId,
             self.ratings.c.projectId == self.projects.c.projectId,
             self.projects.c.region == region,
-            self.projects.c.dateUpload > start_date)
+            self.answers.c.dateAnswer >= start_date)
         ).order_by(
             self.projects.c.office,
             self.projects.c.subProjectNo,
